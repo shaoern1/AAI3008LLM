@@ -1,0 +1,10 @@
+langchain-qdrant
+ollama
+langchain-community
+langchain
+qdrant-client
+langchain-ollama
+langsmith
+python-dotenv
+fastembed
+unstructured
