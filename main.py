@@ -18,6 +18,7 @@ st.markdown(
     **👈 Select the headers on the left to start.
     ### Instructions
     1. Setup Environments and Connections
+    
     2. Upload Document into Vector Database
     3. Select Ollama Model and Run your queries.
     ### Features and Support

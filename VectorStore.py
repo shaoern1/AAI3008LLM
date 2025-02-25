@@ -31,13 +31,18 @@ class DocumentStruct:
         return f"DocumentEmbedding(metadata={self.metadata}, page_content={self.page_content}, embedding={self.embedding}, sparse_embedding={self.sparse_embedding}, late_interaction={self.late_interaction} )"
 
 # Document Loader
-def load_document(file_path: str):
+def load_document(file_path):
+    loader = None
     if file_path.endswith(".pdf"):
         loader = PyPDFLoader(file_path)
     elif file_path.endswith(".txt"):
         loader = TextLoader(file_path)
     elif file_path.endswith(".md"):
         loader = UnstructuredMarkdownLoader(file_path)
+    
+    if loader is None:
+        raise ValueError(f"Unsupported file type: {file_path}")
+    
     documents = loader.load()
     return documents
 
@@ -99,7 +104,7 @@ def setup_Qdrant_client():
     )
     return client
 
-def create_collection(client, collection_name="Ollama-RAG"):
+def create_collection(client, collection_name):
     client.create_collection(
         collection_name,
         vectors_config={
@@ -158,38 +163,38 @@ def upsert_points(client, collection_name, points, batch_size=10):
         except Exception as e:
             print(f"Error with batch {i//batch_size + 1}: {str(e)}")
 
-def main():
-    # Load environment variables
-    load_dotenv()
+# def main():
+#     # Load environment variables
+#     load_dotenv()
     
-    # Specify the file path to process
-    file_path = 'C:/Users/shaoe/OneDrive/Desktop/AAI3008LLM/The_Hundred_page_Machine_Learning_Book_Andriy_Burkov_Z_Library.pdf'
+#     # Specify the file path to process
+#     file_path = 'C:/Users/shaoe/OneDrive/Desktop/AAI3008LLM/The_Hundred_page_Machine_Learning_Book_Andriy_Burkov_Z_Library.pdf'
     
-    # Load and process the document
-    print(f"Loading document: {file_path}")
-    documents = load_document(file_path)
+#     # Load and process the document
+#     print(f"Loading document: {file_path}")
+#     documents = load_document(file_path)
     
-    print(f"Creating chunks from document")
-    chunks = create_chunks(documents)
-    print(f"Created {len(chunks)} chunks")
+#     print(f"Creating chunks from document")
+#     chunks = create_chunks(documents)
+#     print(f"Created {len(chunks)} chunks")
     
-    print("Generating embeddings (this may take some time)...")
-    embeddings_list = generateEmbeddings(chunks)
-    print(f"Generated embeddings for {len(embeddings_list)} chunks")
+#     print("Generating embeddings (this may take some time)...")
+#     embeddings_list = generateEmbeddings(chunks)
+#     print(f"Generated embeddings for {len(embeddings_list)} chunks")
     
-    # Set up Qdrant client and collection
-    client = setup_Qdrant_client()
-    client.delete_collection("Ollama-RAG")
-    collection_name = create_collection(client)
+#     # Set up Qdrant client and collection
+#     client = setup_Qdrant_client()
+#     client.delete_collection("Ollama-RAG")
+#     collection_name = create_collection(client)
     
-    # Prepare and upsert vectors
-    points = prepare_vector_points(embeddings_list)
-    upsert_points(client, collection_name, points)
+#     # Prepare and upsert vectors
+#     points = prepare_vector_points(embeddings_list)
+#     upsert_points(client, collection_name, points)
     
-    print("Document processing and vector storage complete!")
+#     print("Document processing and vector storage complete!")
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
 
 
 
