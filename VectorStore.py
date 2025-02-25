@@ -32,17 +32,12 @@ class DocumentStruct:
 
 # Document Loader
 def load_document(file_path):
-    loader = None
     if file_path.endswith(".pdf"):
         loader = PyPDFLoader(file_path)
     elif file_path.endswith(".txt"):
         loader = TextLoader(file_path)
     elif file_path.endswith(".md"):
         loader = UnstructuredMarkdownLoader(file_path)
-    
-    if loader is None:
-        raise ValueError(f"Unsupported file type: {file_path}")
-    
     documents = loader.load()
     return documents
 
