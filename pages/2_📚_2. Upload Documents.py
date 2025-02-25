@@ -3,7 +3,7 @@ import time
 import numpy as np
 import VectorStore as VSPipe
 import os
-import dotenv
+from dotenv import load_dotenv
 
 
 st.set_page_config(page_title="Upload Documents", page_icon="📈")
@@ -38,6 +38,9 @@ if file is not None:
 #button to start loading and processing
 if st.button("Load and Process Document"):
 
+    # Load env
+    load_dotenv()
+    
     # Load and process the document
     print(f"Loading document: {file.name}")
     documents = VSPipe.load_document(file.name)
@@ -50,12 +53,17 @@ if st.button("Load and Process Document"):
 
     # Generate embeddings
     embeddingsList = VSPipe.generateEmbeddings(chunks)
+    
     # Prepare vector points
     embeddingsList = VSPipe.prepare_vector_points(embeddingsList)
 
-    # Upsert points
-    collection_name = VSPipe.create_collection()
-    VSPipe.upsert_points(VSPipe.client, collection_name, embeddingsList)
+    # Setup Qdrant Client
+    client = VSPipe.setup_Qdrant_client()
+    
+    # Upsert points: CAN MAKE THIS PART MORE ROBUST
+    collection_name = VSPipe.create_collection(client, collection_name)
+    
+    VSPipe.upsert_points(client, collection_name, embeddingsList)
 
     st.write("Embeddings generated and uploaded successfully")
     st.write("Collection name: ", collection_name)
