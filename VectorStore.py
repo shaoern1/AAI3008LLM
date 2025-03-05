@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+import uuid
 
 # Ollama imports
 import ollama
@@ -93,6 +94,7 @@ def generateEmbeddings(documents):
 
 
 def setup_Qdrant_client():
+    load_dotenv()
     client = QdrantClient(
         url=os.environ["QDRANT_URL"], 
         api_key=os.environ["QDRANT_API_KEY"],
@@ -134,12 +136,32 @@ def create_collection(client, collection_name):
     print(f"Created new collection: {collection_name}")
     return collection_name
 
+# Check existing source
+def check_source_exists(client, collection_name, source_name):
+    """Check if a source already exists in the collection"""
+    try:
+        response = client.count(
+            collection_name=collection_name,
+            count_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="metadata.source",
+                        match=models.MatchValue(value=source_name)
+                    )
+                ]
+            )
+        )
+        return response.count > 0
+    except Exception as e:
+        print(f"Error checking source existence: {str(e)}")
+        return False
+
 def prepare_vector_points(embeddingsList):
     points = []
     
     for idx, item in enumerate(embeddingsList):
         point = PointStruct(
-            id = idx,
+            id = str(uuid.uuid4()),
             vector = {
                 "gte-qwen1.5": item.embedding,
                 "bm25": models.SparseVector(indices=item.sparse_embedding[0].indices, values=item.sparse_embedding[0].values),

@@ -70,12 +70,11 @@ if file is not None:
     if st.session_state.collection_name and st.session_state.collection_name != '':
         if VSPipe.check_source_exists(client, st.session_state.collection_name, file.name):
             st.warning(f"⚠️ A document with name '{file.name}' already exists in collection '{st.session_state.collection_name}'.")
-            proceed = st.checkbox("Upload anyway? (This may create duplicate information)", value=False)
-            if not proceed:
-                st.stop()
 
     # Pass the file path to your function
     file_path = file
+elif st.session_state.collection_name == "":
+    st.write("⚠️ Please select or input a collection name before uploading")
     
 
 #button to start loading and processing
