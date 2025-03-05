@@ -5,6 +5,21 @@ import VectorStore as VSPipe
 import os
 from dotenv import load_dotenv
 
+# Initialize session state for tracking which input was last modified
+if 'last_modified' not in st.session_state:
+    st.session_state.last_modified = None
+if 'collection_name' not in st.session_state:
+    st.session_state.collection_name = ""
+
+# Callback functions to track changes
+def on_input_change():
+    st.session_state.last_modified = "input"
+    st.session_state.collection_name = st.session_state.collection_input
+
+def on_select_change():
+    if st.session_state.collection_select != '':
+        st.session_state.last_modified = "select"
+        st.session_state.collection_name = st.session_state.collection_select
 
 st.set_page_config(page_title="Upload Documents", page_icon="📈")
 
@@ -14,14 +29,31 @@ st.write(
     """Add description of the page here."""
 )
 
-
-
 # check if environment file exists
 if not os.path.exists('.env'):
     st.error("Please setup your API and Connections first")
     st.stop()
+    
+# Setup Qdrant Client
+client = VSPipe.setup_Qdrant_client()
+default_collection_list = ['']
+    
 # collection name input     
-collection_name = st.text_input("Collection Name", "Ollama-RAG")
+collection_input = st.text_input("Enter a new collection name:", 
+                               value="", 
+                               key="collection_input", 
+                               on_change=on_input_change)
+
+st.write("**OR**")
+collection_list = VSPipe.get_collection_names(client)
+default_collection_list.extend(collection_list)
+
+collection_select = st.selectbox("Select an existing collection", 
+                               options=default_collection_list, 
+                               key="collection_select", 
+                               on_change=on_select_change)
+
+st.write(f"**Current collection:** {st.session_state.collection_name}")
 
 file = st.file_uploader("Upload a file", type=["pdf", "txt", "md"])
 if file is not None:
@@ -34,12 +66,20 @@ if file is not None:
     with open(file.name, "wb") as f:
         f.write(file.getbuffer())
     
+    # Check if this source already exists in the selected collection
+    if st.session_state.collection_name and st.session_state.collection_name != '':
+        if VSPipe.check_source_exists(client, st.session_state.collection_name, file.name):
+            st.warning(f"⚠️ A document with name '{file.name}' already exists in collection '{st.session_state.collection_name}'.")
+            proceed = st.checkbox("Upload anyway? (This may create duplicate information)", value=False)
+            if not proceed:
+                st.stop()
+
     # Pass the file path to your function
     file_path = file
+    
 
 #button to start loading and processing
 if st.button("Load and Process Document"):
-
     # Load env
     load_dotenv()
     
@@ -54,16 +94,22 @@ if st.button("Load and Process Document"):
     print("Generating embeddings (this may take some time)...")
 
     # Generate embeddings
-    embeddingsList = VSPipe.generateEmbeddings(chunks)
+    try:
+        embeddingsList = VSPipe.generateEmbeddings(chunks)
+    except Exception as e:
+        st.error(f"Error generating embeddings: {str(e)}. Please refer to documentations.")
+        st.stop()  # Stop execution if there's an error
+        
     
     # Prepare vector points
     embeddingsList = VSPipe.prepare_vector_points(embeddingsList)
-
-    # Setup Qdrant Client
-    client = VSPipe.setup_Qdrant_client()
     
-    # Upsert points: CAN MAKE THIS PART MORE ROBUST
-    collection_name = VSPipe.create_collection(client, collection_name)
+    # Upsert points
+    if st.session_state.last_modified == "input":
+        collection_name = st.session_state.collection_name
+        collection_name = VSPipe.create_collection(client, collection_name)
+    else:
+        collection_name = st.session_state.collection_name
     
     VSPipe.upsert_points(client, collection_name, embeddingsList)
 

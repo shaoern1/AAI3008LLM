@@ -2,6 +2,7 @@ import streamlit as st
 import time
 import os
 from dotenv import load_dotenv
+import VectorStore as VSPipe
 import AgenticLLM as RAGPipe  # Import the RAG pipeline
 
 st.set_page_config(page_title="RAG Search", page_icon="🔍")
@@ -19,6 +20,17 @@ if not os.path.exists('.env'):
 
 # Load environment variables
 load_dotenv()
+
+
+# ::: Can use session_state from streamlit as Global Vars
+client = VSPipe.setup_Qdrant_client()
+collection_list = VSPipe.get_collection_names(client)
+
+# Model name
+model_path = st.text_input("Enter your Model Name:", "phi-3:mini")
+collection_select = st.selectbox("Select your collection", collection_list)
+st.write(f'Current Model Selected: {model_path}')
+st.write(f'Current Vector DB Selected {collection_select}')
 
 # Input query
 query = st.text_input("Enter your query:", "")
