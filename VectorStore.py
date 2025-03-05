@@ -99,6 +99,17 @@ def setup_Qdrant_client():
     )
     return client
 
+# Retrieves List of Collections in qdrant servers.
+def get_collection_names(client):
+    try:
+        collections = client.get_collections()
+        # Extract just the collection names from the response
+        collection_names = [collection.name for collection in collections.collections]
+        return collection_names
+    except Exception as e:
+        print(f"Error retrieving collections: {str(e)}")
+        return []
+
 def create_collection(client, collection_name):
     client.create_collection(
         collection_name,
