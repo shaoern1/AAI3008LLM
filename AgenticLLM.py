@@ -191,17 +191,28 @@ class RAGAgent:
         """
         # Create wrapper functions that don't require additional parameters
         def document_search(query):
-            return self.search(query, enable_search=enable_search)
+            try:
+                result = self.search(query, enable_search=enable_search)
+                if not result or len(result) < 10:  # Very short or empty results
+                    return "No relevant information found in the documents about this topic."
+                return result
+            except Exception as e:
+                return f"Error in document search: {str(e)}"
         
         def online_search_tool(query):
-            return self.online_search(query)
-        
-        # Define tools with simple functions
+            try:
+                result = self.online_search(query)
+                if not result or len(result) < 10:  # Very short or empty results
+                    return "No relevant information found in the documents about this topic."
+                return result
+            except Exception as e:
+                return f"Error in online search: {str(e)}"
+            
         tools = [
             Tool(
                 name="document_search",
                 func=document_search,
-                description="Useful for answering questions based on documents in your collection."
+                description="Search for information in the document database."
             )
         ]
         
@@ -214,7 +225,12 @@ class RAGAgent:
                     description="Useful for finding current information online."
                 )
             )
-        
+
+        def return_nothing_found(stopped_response):
+            return {
+                "output": "Nothing can be found about this topic in the available resources."
+            }
+            
         # Use a more structured prompt with clearer examples
         from langchain.prompts import PromptTemplate
         from langchain.agents import AgentExecutor, create_react_agent
@@ -264,7 +280,10 @@ class RAGAgent:
             verbose=True,
             handle_parsing_errors=True,
             callbacks=[tracer],
-            max_iterations=10  # Increased from 3 to 5
+            max_iterations=10,
+            return_intermediate_steps=True,
+            early_stopping_method="generate",
+            stopping_response=return_nothing_found
         )
 
 # Legacy functions that maintain the same interface for backward compatibility, 
