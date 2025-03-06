@@ -264,7 +264,7 @@ class RAGAgent:
             verbose=True,
             handle_parsing_errors=True,
             callbacks=[tracer],
-            max_iterations=5  # Increased from 3 to 5
+            max_iterations=10  # Increased from 3 to 5
         )
 
 # Legacy functions that maintain the same interface for backward compatibility, 
