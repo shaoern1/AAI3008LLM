@@ -125,6 +125,42 @@ class RAGAgent:
             | StrOutputParser()
         )
         return rag_chain
+    
+    def get_formatted_prompt(self, query, enable_search=False):
+        """
+        Get the fully formatted prompt without executing it
+        
+        Args:
+            query: The search query
+            enable_search: Whether to include online search results
+            
+        Returns:
+            dict: Dictionary containing context, online_context, question and formatted prompt
+        """
+        # Manually gather all inputs
+        context = self.retrieve_documents(query)
+        online_context = self.online_search(query) if enable_search else self.filler(query)
+        
+        # Format the template
+        template = """Answer the question based on the following context:
+        {context}
+        {online_context}
+        
+        Question: {question}
+        """
+        prompt = ChatPromptTemplate.from_template(template)
+        formatted = prompt.format(
+            context=context,
+            online_context=online_context,
+            question=query
+        )
+        
+        return {
+            "context": context,
+            "online_context": online_context, 
+            "question": query,
+            "formatted_prompt": formatted
+        }
 
     def search(self, query, enable_search=False):
         """

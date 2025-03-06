@@ -72,8 +72,21 @@ if st.session_state.agent_loaded:
     if st.button("Search"):
         if user_query:
             with st.spinner("Retrieving information..."):
-                st.write("## Prepared Prompt:")
-                st.write(st.session_state.rag_agent.hybrid_search("What is machine learning?"))
+                prompt_info = st.session_state.rag_agent.get_formatted_prompt(
+                    user_query, 
+                    enable_search=enable_online_search
+                )
+                
+                st.write("## Complete Prompt Template:")
+                st.text(prompt_info["formatted_prompt"])
+                
+                st.write("## Individual Components:")
+                st.write("### Context:")
+                st.text(prompt_info["context"])
+                
+                st.write("### Online Context:")
+                st.text(prompt_info["online_context"])
+
                 response = st.session_state.agent.run(user_query)
                 st.write("## Response:")
                 st.write(response)
