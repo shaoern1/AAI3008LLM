@@ -20,6 +20,14 @@ from langchain_community.utilities import GoogleSearchAPIWrapper
 from langchain.agents import Tool, initialize_agent, AgentType
 from langchain_google_community import GoogleSearchAPIWrapper
 from functools import partial
+from langchain_community.llms import Ollama  # or another local LLM wrapper
+from langchain.callbacks.tracers import LangChainTracer
+from langsmith import Client
+
+
+tracer = LangChainTracer(project_name="AAILLMPROJ")
+
+
 # Enable asyncio nest
 def enable_asyncio():
     nest_asyncio.apply()
@@ -42,7 +50,7 @@ class RAGAgent:
         self.collection_name = collection_name
         self.llm_model = llm_model
         self.dense_model = dense_model
-        self.llm = ChatOllama(model=llm_model)
+        self.llm = ChatOllama(model=llm_model, callbacks=[tracer])  
     
     def hybrid_search(self, query: str, limit: int = 5):
         """
@@ -108,7 +116,6 @@ class RAGAgent:
         """
         template = """Answer the question based on the following context:
         {context}
-        {online_context}
         
         Question: {question}
         """
@@ -118,7 +125,6 @@ class RAGAgent:
             {
                 "context": self.retrieve_documents,
                 "question": RunnablePassthrough(),
-                "online_context": self.online_search if enable_search else self.filler
             }
             | prompt
             | self.llm
@@ -174,7 +180,7 @@ class RAGAgent:
             Response from the LLM
         """
         rag_chain = self.get_rag_chain(enable_search=enable_search)
-        return rag_chain.invoke(query)
+        return rag_chain.invoke(query, callbacks=[tracer])
 
     def init_agent(self, enable_search):
         """
@@ -183,23 +189,82 @@ class RAGAgent:
         Returns:
             An initialized LangChain agent
         """
-        # Define tools for the agent
-        search_with_params = partial(self.search, enable_search=enable_search)
+        # Create wrapper functions that don't require additional parameters
+        def document_search(query):
+            return self.search(query, enable_search=enable_search)
         
+        def online_search_tool(query):
+            return self.online_search(query)
+        
+        # Define tools with simple functions
         tools = [
             Tool(
                 name="document_search",
-                func=search_with_params,
+                func=document_search,
                 description="Useful for answering questions based on documents in your collection."
             )
         ]
         
-        return initialize_agent(
-            tools, 
-            self.llm, 
-            agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, 
+        # Only add the online search tool if enabled
+        if enable_search:
+            tools.append(
+                Tool(
+                    name="online_search",
+                    func=online_search_tool,
+                    description="Useful for finding current information online."
+                )
+            )
+        
+        # Use a more structured prompt with clearer examples
+        from langchain.prompts import PromptTemplate
+        from langchain.agents import AgentExecutor, create_react_agent
+        
+        prompt = PromptTemplate.from_template(
+            """Answer the following questions as best you can. You have access to the following tools:
+
+        {tools}
+
+        Use the following format:
+
+        Question: the input question you must answer
+        Thought: you should always think about what to do
+        Action: the action to take, should be one of [{tool_names}]
+        Action Input: the input to the action
+        Observation: the result of the action
+        ... (this Thought/Action/Action Input/Observation can repeat N times)
+        Thought: I now know the final answer
+        Final Answer: the final answer to the original input question
+
+        Here is an example of the correct format:
+        Question: What is a loss function?
+        Thought: I need to search for information about loss functions.
+        Action: document_search
+        Action Input: definition of loss function and its importance
+        Observation: Loss functions measure how far off predictions are from actual values. They're used in training machine learning models.
+        Thought: I now know the final answer.
+        Final Answer: A loss function measures the difference between predicted values and actual values, guiding the optimization process in machine learning.
+
+        Begin!
+
+        Question: {input}
+        {agent_scratchpad}"""
+            )
+        
+        # Create a custom agent with the improved prompt
+        agent = create_react_agent(
+            llm=self.llm,
+            tools=tools,
+            prompt=prompt
+        )
+        
+        # Create an executor with a higher max iterations to give it more chances
+        return AgentExecutor.from_agent_and_tools(
+            agent=agent,
+            tools=tools,
             verbose=True,
-            # handle_parsing_errors=True
+            handle_parsing_errors=True,
+            callbacks=[tracer],
+            max_iterations=5  # Increased from 3 to 5
         )
 
 # Legacy functions that maintain the same interface for backward compatibility, 
