@@ -73,6 +73,8 @@ if file is not None:
 
     # Pass the file path to your function
     file_path = file
+elif st.session_state.collection_name == "":
+    st.write("⚠️ Please select or input a collection name before uploading")
     
 
 #button to start loading and processing
