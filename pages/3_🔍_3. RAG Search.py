@@ -21,13 +21,12 @@ if not os.path.exists('.env'):
 # Load environment variables
 load_dotenv()
 
-
 # ::: Can use session_state from streamlit as Global Vars
 client = VSPipe.setup_Qdrant_client()
 collection_list = VSPipe.get_collection_names(client)
 
 # Model name
-model_path = st.text_input("Enter your Model Name:", "phi4-mini")
+model_path = st.text_input("Enter your Model Name:", "phi3:mini")
 collection_select = st.selectbox("Select your collection", collection_list)
 st.write(f'Current Model Selected: {model_path}')
 st.write(f'Current Vector DB Selected {collection_select}')
@@ -37,6 +36,10 @@ if 'agent_loaded' not in st.session_state:
     st.session_state.agent_loaded = False
 if 'agent' not in st.session_state:
     st.session_state.agent = None
+if 'agent_with_search' not in st.session_state:
+    st.session_state.agent_with_search = None
+if 'last_search_setting' not in st.session_state:
+    st.session_state.last_search_setting = None
 
 # Button to load the agent
 if not st.session_state.agent_loaded:
@@ -49,13 +52,17 @@ if not st.session_state.agent_loaded:
                 llm_model=model_path
             )
             
-            st.session_state.agent = st.session_state.rag_agent.init_agent(enable_search=True)
+            # Initialize with default setting (no search)
+            st.session_state.agent = st.session_state.rag_agent.init_agent(enable_search=False)
+            st.session_state.last_search_setting = False
             st.session_state.agent_loaded = True
+            
             try:
                 # Run warmup with error handling
-                st.session_state.agent.run('Hello')  # Warmup
+                st.session_state.agent.invoke({"input": "Hello"})  # Warmup
             except Exception as e:
                 # Silently ignore warmup errors
+                st.error(f"Warmup error (this can be ignored): {str(e)}")
                 pass
             
             # Show confirmation
@@ -87,8 +94,21 @@ if st.session_state.agent_loaded:
                 st.write("### Online Context:")
                 st.text(prompt_info["online_context"])
 
-                response = st.session_state.agent.run(user_query)
-                st.write("## Response:")
-                st.write(response)
+                try:
+                    # Check if we need to create a new agent with different search settings
+                    if st.session_state.last_search_setting != enable_online_search:
+                        st.session_state.agent = st.session_state.rag_agent.init_agent(enable_search=enable_online_search)
+                        st.session_state.last_search_setting = enable_online_search
+                    
+                    # Use the agent with the correct search settings
+                    response = st.session_state.agent.invoke({"input": user_query})
+                    st.write("## Response:")
+                    if isinstance(response, dict) and "output" in response:
+                        st.write(response["output"])  # Just write the output if it's in expected format (dict with "output" key)   
+                    else:
+                        st.write(response)  # Just write the whole response if it's not in expected format
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+                    st.error("Try refreshing the page and loading the agent again.")
         else:
             st.warning("Please enter a query first")
