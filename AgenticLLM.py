@@ -51,6 +51,16 @@ class RAGAgent:
         self.llm_model = llm_model
         self.dense_model = dense_model
         self.llm = ChatOllama(model=llm_model, callbacks=[tracer])  
+
+    def warmup(self):
+        """Run a simple warmup without the full agent complexity"""
+        simple_template = """Respond to the following input with a simple greeting:
+        
+        Input: {input}
+        """
+        simple_prompt = ChatPromptTemplate.from_template(simple_template)
+        simple_chain = simple_prompt | self.llm | StrOutputParser()
+        return simple_chain.invoke({"input": "Hello"})
     
     def hybrid_search(self, query: str, limit: int = 5):
         """
@@ -182,7 +192,7 @@ class RAGAgent:
         rag_chain = self.get_rag_chain(enable_search=enable_search)
         return rag_chain.invoke(query, callbacks=[tracer])
 
-    def init_agent(self, enable_search):
+    def init_agent(self, enable_search, reset_context=True):
         """
         Initialize a LangChain agent with document search capabilities
         
@@ -283,8 +293,13 @@ class RAGAgent:
             max_iterations=10,
             return_intermediate_steps=True,
             early_stopping_method="generate",
-            stopping_response=return_nothing_found
+            stopping_response=return_nothing_found,
+            memory= None
         )
+
+
+
+
 
 # Legacy functions that maintain the same interface for backward compatibility, 
 def hybrid_search(query: str, client: QdrantClient, collection: str, 

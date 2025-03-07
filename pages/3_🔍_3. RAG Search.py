@@ -40,11 +40,17 @@ if 'agent_with_search' not in st.session_state:
     st.session_state.agent_with_search = None
 if 'last_search_setting' not in st.session_state:
     st.session_state.last_search_setting = None
+if 'agent_init_id' not in st.session_state:
+    st.session_state.agent_init_id = None
 
 # Button to load the agent
 if not st.session_state.agent_loaded:
     if st.button("Load Agent"):
         with st.spinner("Initializing agent..."):
+            # Generate a new ID for this agent initialization
+            import uuid
+            new_agent_id = str(uuid.uuid4())
+            
             # Initialize Agent
             st.session_state.rag_agent = RAGPipe.RAGAgent(
                 client=client,  
@@ -56,20 +62,36 @@ if not st.session_state.agent_loaded:
             st.session_state.agent = st.session_state.rag_agent.init_agent(enable_search=False)
             st.session_state.last_search_setting = False
             st.session_state.agent_loaded = True
+            st.session_state.agent_init_id = new_agent_id
             
             try:
                 # Run warmup with error handling
-                st.session_state.agent.invoke({"input": "Hello"})  # Warmup
+                st.session_state.rag_agent.warmup()
+
             except Exception as e:
-                # Silently ignore warmup errors
                 st.error(f"Warmup error (this can be ignored): {str(e)}")
-                pass
             
             # Show confirmation
-            st.success("Agent successfully loaded!")
+            st.success("Agent successfully loaded with fresh context!")
 
 # Only show search options if agent is loaded
 if st.session_state.agent_loaded:
+    # Create two columns for the buttons
+    col1, col2 = st.columns(2)
+    
+    # Add Reset Agent Context button in the first column
+    with col1:
+        if st.button("Reset Agent Context"):
+            with st.spinner("Resetting agent context..."):
+                # Reinitialize the agent with the same settings
+                st.session_state.agent = st.session_state.rag_agent.init_agent(
+                    enable_search=st.session_state.last_search_setting
+                )
+                # Generate a new ID for this agent reset
+                import uuid
+                st.session_state.agent_init_id = str(uuid.uuid4())
+                st.success("Agent context has been reset!")
+    
     # Option to enable online search
     # Input query
     user_query = st.text_input("Enter your query:", "")
