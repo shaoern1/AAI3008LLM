@@ -27,6 +27,7 @@ from typing import TypedDict, List, Dict, Any, Annotated
 import operator
 from langchain_core.messages import BaseMessage
 import VectorStore as VSPipe
+from dotenv import load_dotenv
 
 # Update the AgentState TypedDict to include a new field
 class AgentState(TypedDict):
@@ -37,6 +38,7 @@ class AgentState(TypedDict):
 
 # Create the tools
 web_search = DuckDuckGoSearchRun()
+
 
 class RAGAgent:
     def __init__(self, client, collection_name, llm_model="phi4-mini", 
@@ -72,13 +74,6 @@ class RAGAgent:
             context += str(result.payload['text'])
         return context
     
-    # Node functions for LangGraph
-    def assistant_node(self, state: AgentState):
-        """Initial assistant response"""
-        messages = state["messages"]
-        response = self.llm.invoke(messages)
-        return {"messages": messages + [response]}
-    
     def vector_search_node(self, state: AgentState):
         """Search vector database and determine if results are useful"""
         messages = state["messages"]
@@ -101,7 +96,7 @@ class RAGAgent:
         
         # Add results to messages with appropriate commentary
         if found_info:
-            search_message = AIMessage(content=f"I found the following information in the document database:\n{context}")
+            search_message = AIMessage(content=f"Vector Search Context: {context}")
         else:
             search_message = AIMessage(content="I searched the document database but couldn't find any relevant information for your query.")
         
@@ -115,18 +110,22 @@ class RAGAgent:
         messages = state["messages"]
         
         eval_prompt = HumanMessage(content="""
-        Based on the information retrieved so far, do you have sufficient information to answer the user's question comprehensively? 
-        Respond with SUFFICIENT if you have enough information, or INSUFFICIENT if you need more information.
+        Based on the information from Vector Search Context, do you have sufficient information to answer the user's question? 
+        Respond with SUFFICIENT if you have enough information, or INSUFFICIENT if you need more information, NOTHING ELSE.
         """)
         
         eval_response = self.llm.invoke(messages + [eval_prompt])
-        is_sufficient = "SUFFICIENT" in eval_response.content
+        if eval_response.content == "SUFFICIENT":
+            is_sufficient = True
+        else:
+            is_sufficient = False
         
         return {"info_sufficient": is_sufficient, "messages": messages}
     
     def web_search_node(self, state: AgentState):
         """Search the web for additional information"""
         messages = state["messages"]
+        
         # Get the last user query
         user_query = next((msg.content for msg in reversed(messages) 
                           if isinstance(msg, HumanMessage)), "")
@@ -135,7 +134,7 @@ class RAGAgent:
         web_results = web_search.run(user_query)
         
         # Add results to messages
-        web_message = AIMessage(content=f"I found additional information from the web:\n{web_results}")
+        web_message = AIMessage(content=f"Online Search Context:\n{web_results}")
         return {"messages": messages + [web_message]}
     
     def final_response_node(self, state: AgentState):
@@ -145,6 +144,10 @@ class RAGAgent:
         final_prompt = HumanMessage(content="""
         Now provide a comprehensive answer to the original question based ONLY on the information provided 
         in the search results above. Do not use any prior knowledge.
+        
+        YOU MUST INCLUDE ALL THE INFORMATION EXACTLY IN THE PREVIOUS MESSAGES FROM DATABASE SEARCH AND WEB SEARCH INTO TWO SECTIONS IN YOUR RESPONSE,
+        VECTOR SEARCH CONTEXT: , ONLINE SEARCH CONTEXT: ,
+        IF THERE WAS NO ONLINE SEARCH CONTEXT DO NOT INCLUDE ONLINE SEARCH CONTEXT:
         
         For each piece of information in your answer, indicate which source it came from 
         (database or web search). If the search results don't contain enough information to 
@@ -157,88 +160,71 @@ class RAGAgent:
     def insufficient_info_node(self, state: AgentState):
         """Generate a response when information is insufficient and web search is disabled"""
         messages = state["messages"]
-        found_db_info = state["found_db_info"]
+        enable_search = state["enable_search"]
+        info_sufficient = state["info_sufficient"]
         
         # Get the original query for context
         user_query = next((msg.content for msg in reversed(messages) 
                           if isinstance(msg, HumanMessage)), "")
         
-        if not found_db_info:
+        if info_sufficient == False and enable_search == False:
             message_content = f"""I couldn't find any relevant information about "{user_query}" in my document database.
-
 If you enable web search, I can look for information online. 
 Alternatively, you could try asking about a different topic that might be covered in the documents I have access to."""
-        else:
-            message_content = f"""I found some information in my document database about "{user_query}", but it's not enough to provide a comprehensive answer.
-
-If you enable web search, I can supplement with information from the internet.
-Or you could try asking a more specific question about the aspects that are covered in my documents."""
         
         insufficient_message = AIMessage(content=message_content)
         
         return {"messages": messages + [insufficient_message]}
     
-    def extract_relevant_info_node(self, state: AgentState):
-        """Extract only the relevant information from search results"""
-        messages = state["messages"]
+    def route_after_evaluation(self, state: AgentState) -> str: # Purely for logical routing
+        """Route to the next node based on information sufficiency and search settings"""
+        # If sufficient and no further action needed, go straight to final response
+        if state["info_sufficient"] and not state["enable_search"]:
+            return "final_response"  # Terminal
         
-        extraction_prompt = HumanMessage(content="""
-        From the search results provided above, extract ONLY the specific pieces of information 
-        that are directly relevant to answering the original question. 
-        
-        Format each piece as:
-        - [Source: Database/Web] Information piece
-        
-        Do not add any information that is not explicitly present in the search results.
-        """)
-        
-        extraction_response = self.llm.invoke(messages + [extraction_prompt])
-        return {"messages": messages + [extraction_response]}
-    
-    def should_search_web(self, state: AgentState) -> str:
-        """Determine next step based on information sufficiency and search settings"""
-        if not state["info_sufficient"]:
-            if state["enable_search"]:
-                return "search_web"  # Information insufficient, web search enabled
-            else:
-                return "insufficient_info"  # Information insufficient, web search disabled
+        # If insufficient, check if we can search the web
+        if state["enable_search"]:
+            return "web_search"  # Web search enabled, so use it
         else:
-            return "final_response"  # Information is sufficient
+            return "insufficient_info"  # Terminal
+    
+    
+    # Vector Search -> Evaluation -> Web_search(Conditional) -> Final Response [CASE: Enable_search == TRUE & INFO INSUFFICIENT]
+    # Vector Search -> Evaluation -> Final Response [CASE: Enable_search flag FALSE, INFO SUFFICIENT]
+    # Vector Search -> Evaluation ->  Insufficient_node [CASE: Enable_search FALSE, INFO INSUFFICIENT]
     
     def create_graph(self):
         # Create the graph
         workflow = StateGraph(AgentState)
         
         # Add nodes
-        workflow.add_node("assistant", self.assistant_node)
+        # workflow.add_node("assistant", self.assistant_node)
         workflow.add_node("vector_search", self.vector_search_node)
         workflow.add_node("evaluate_info", self.evaluate_info_node)
         workflow.add_node("web_search", self.web_search_node)
-        workflow.add_node("final_response", self.final_response_node)
-        workflow.add_node("insufficient_info", self.insufficient_info_node)  # Add new node
-        workflow.add_node("extract_info", self.extract_relevant_info_node)  # Add the new extraction node
+        workflow.add_node("final_response", self.final_response_node) # Terminal (When db search/web search deemed sufficient)
+        workflow.add_node("insufficient_info", self.insufficient_info_node) # Terminal (When context search fails)
         
         # Add edges
-        workflow.add_edge(START, "assistant")
-        workflow.add_edge("assistant", "vector_search")
+        workflow.add_edge(START, "vector_search")
         workflow.add_edge("vector_search", "evaluate_info")
         
-        # Add conditional edge from evaluate_info
+        # Add conditional edge from evaluate_info using the routing function
         workflow.add_conditional_edges(
-            "evaluate_info",
-            self.should_search_web,
-            {
-                "search_web": "web_search",
-                "final_response": "extract_info",  # Changed from final_response
-                "insufficient_info": "insufficient_info"  # Add new conditional edge
-            }
+        "evaluate_info",  # Source node
+        self.route_after_evaluation,  # Routing function
+        {
+            "final_response": "final_response",  # Map return values to destination nodes
+            "web_search": "web_search",
+            "insufficient_info": "insufficient_info"
+        }
         )
         
-        workflow.add_edge("web_search", "extract_info")  # After web search, extract info
-        workflow.add_edge("extract_info", "final_response")  # Then generate final response
+        workflow.add_edge("web_search", "final_response")  
         
-        # Set final_response as the final node
+        # Set Terminal Nodes
         workflow.add_edge("final_response", END)
+        workflow.add_edge("insufficient_info", END) 
     
         
         # Compile the graph
@@ -247,15 +233,16 @@ Or you could try asking a more specific question about the aspects that are cove
     def invoke(self, query, enable_search=False):
         """Run the agent with the given query"""
         # Initialize state with stricter system prompt
+        load_dotenv() 
         state = {
             "messages": [
                 SystemMessage(content="""You are a retrieval-augmented assistant that ONLY uses information 
                 provided in the context from document database or web searches.
                 
                 IMPORTANT:
-                - If the needed information is not in the provided context, admit you don't know
-                - Do NOT use any prior knowledge that wasn't explicitly provided in the context
-                - Only reference information that appears in the search results
+                - If the needed information is not in the provided context, admit you don't know.
+                - Do NOT use any prior knowledge that wasn't explicitly provided in the context.
+                - Only reference information that appears in the search results.
                 - If you're uncertain about any information, say so rather than guessing"""),
                 HumanMessage(content=query)
             ],
@@ -270,8 +257,8 @@ Or you could try asking a more specific question about the aspects that are cove
         # Return the last message
         return result["messages"][-1].content
 
-# Example usage
-client = VSPipe.setup_Qdrant_client()
-agent = RAGAgent(client=client, collection_name='Ollama-test1')
-response = agent.invoke("Why is a tomato red", enable_search=True)
-print(response)
+# MCDONALDS HIRE ME
+# client = VSPipe.setup_Qdrant_client()
+# agent = RAGAgent(client=client, collection_name='Ollama-test1')
+# response = agent.invoke("Why is a tomato red", enable_search=False)
+# print(response)
