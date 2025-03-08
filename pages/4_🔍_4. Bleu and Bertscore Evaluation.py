@@ -1,5 +1,11 @@
+# streamlit_app.py
 import streamlit as st
-from evaluation import compute_bleu, compute_bert_score  # Import evaluation functions
+import os
+from dotenv import load_dotenv
+from evaluation import compute_bleu, compute_sacrebleu, compute_bert_score
+
+# Load environment variables at the start
+load_dotenv()
 
 st.set_page_config(
     page_title="Evaluate Model Response",
@@ -14,14 +20,22 @@ candidate = st.text_area("Generated Answer", "")
 
 if st.button("Evaluate"):
     if reference and candidate:
-        # Compute BLEU and BERTScore
-        bleu = compute_bleu(reference, candidate)
+        # Compute BLEU
+        bleu_nltk = compute_bleu(reference, candidate)
+        bleu_sacre = compute_sacrebleu(reference, candidate)
+
+        # Display BLEU results
+        st.write(f"**BLEU Score (NLTK):** {bleu_nltk:.4f}")
+        st.write(f"**BLEU Score (SacreBLEU):** {bleu_sacre:.4f}")
+
+        # Load and Compute Bert Score if User want to,
         bert = compute_bert_score(reference, candidate)
 
-        # Display BLEU and BERTScore results
-        st.write(f"**BLEU Score:** {bleu:.4f}")
-        st.write(f"**BERTScore Precision:** {bert['precision']:.4f}")
-        st.write(f"**BERTScore Recall:** {bert['recall']:.4f}")
-        st.write(f"**BERTScore F1:** {bert['f1']:.4f}")
+        if bert is not None:
+        #Compute and display Bert Score
+            st.write(f"**BERTScore Precision:** {bert['precision']:.4f}")
+            st.write(f"**BERTScore Recall:** {bert['recall']:.4f}")
+            st.write(f"**BERTScore F1:** {bert['f1']:.4f}")
+
     else:
         st.error("Please provide both reference and generated answers.")
