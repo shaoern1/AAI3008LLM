@@ -1,8 +1,8 @@
 import streamlit as st
-import VectorStore as VSPipe
-import os
-import dotenv
-from evaluation import compute_bleu, compute_bert_score
+
+import nltk
+
+nltk.download('punkt_tab')
 
 st.set_page_config(
 page_title="Upload Document",
@@ -22,7 +22,6 @@ st.markdown(
     1. Setup Environments and Connections
     2. Upload Document into Vector Database
     3. Select Ollama Model and Run your queries.
-    4. Evaluate using Bleu and Bert-Score
     
     ### Features and Support
     Supports Google Search
