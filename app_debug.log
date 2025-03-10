@@ -1,0 +1,25 @@
+2025-03-10 17:36:42,354 - __main__ - INFO - Starting app with enhanced debugging
+2025-03-10 17:36:42,356 - __main__ - WARNING - Debug module not found, continuing without patches
+2025-03-10 17:36:42,356 - __main__ - INFO - Importing streamlit
+2025-03-10 17:36:42,356 - __main__ - INFO - Streamlit imported successfully
+2025-03-10 17:36:42,356 - __main__ - INFO - Importing dotenv
+2025-03-10 17:36:42,368 - __main__ - INFO - Dotenv imported successfully
+2025-03-10 17:36:42,368 - __main__ - INFO - Importing compute_bleu
+2025-03-10 17:36:42,371 - __main__ - INFO - compute_bleu imported successfully
+2025-03-10 17:36:42,371 - __main__ - INFO - Importing compute_sacrebleu
+2025-03-10 17:36:42,372 - __main__ - INFO - compute_sacrebleu imported successfully
+2025-03-10 17:36:42,372 - __main__ - INFO - Importing compute_bert_score
+2025-03-10 17:36:42,372 - __main__ - INFO - compute_bert_score imported successfully
+2025-03-10 17:36:42,372 - __main__ - INFO - Loading environment variables
+2025-03-10 17:36:42,373 - __main__ - INFO - Environment variables loaded
+2025-03-10 17:36:42,373 - __main__ - INFO - Setting page config
+2025-03-10 17:36:42,373 - __main__ - INFO - Page config set successfully
+2025-03-10 17:36:42,373 - __main__ - INFO - Setting up markdown header
+2025-03-10 17:36:42,374 - __main__ - INFO - Markdown header set successfully
+2025-03-10 17:36:42,374 - __main__ - INFO - Creating text areas
+2025-03-10 17:36:42,375 - __main__ - INFO - Text areas created successfully
+2025-03-10 17:36:42,376 - __main__ - INFO - Setting up evaluate button
+2025-03-10 17:36:42,376 - __main__ - INFO - Button created: False
+2025-03-10 17:36:42,376 - __main__ - INFO - Setting up button logic
+2025-03-10 17:36:42,377 - __main__ - INFO - Showing initial info message
+2025-03-10 17:36:42,377 - __main__ - INFO - App script completed

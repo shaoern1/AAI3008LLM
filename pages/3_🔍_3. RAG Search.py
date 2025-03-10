@@ -1,9 +1,7 @@
 import streamlit as st
-import time
 import os
 from dotenv import load_dotenv
 import VectorStore as VSPipe
-import AgenticLLM # DEPRECATED
 import agent as RAGPipe
 from langchain_community.tools.ddg_search import DuckDuckGoSearchRun
 from langchain.agents import Tool, initialize_agent, AgentType

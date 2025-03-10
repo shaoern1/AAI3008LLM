@@ -1,7 +1,8 @@
 import streamlit as st
-import VectorStore as VSPipe
-import os
-import dotenv
+
+import nltk
+
+nltk.download('punkt_tab')
 
 st.set_page_config(
 page_title="Upload Document",
