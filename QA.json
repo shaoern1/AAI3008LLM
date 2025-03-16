@@ -1,0 +1,53 @@
+[
+    {
+      "question": "What are the 2 most common regularizations?",
+      "answer": "The 2 most common regularizations are L1 and L2 regularization Pages: 12"
+    },
+
+    {
+      "question": "What is Overfitting in Machine Learning?",
+      "answer": "Overfitting occurs when a model learns noise in the training data and performs poorly on new, unseen data. Page: 24"
+    },
+
+    {
+      "question": "What is the difference between Parameters and Hyperparameters?",
+      "answer": "Parameters are learned by the model from data, while hyperparameters are set before training and control the learning process. Page:19"
+    },
+
+    {
+      "question": "What is the purpose of Hyperparameter Tuning?",
+      "answer": "Hyperparameter tuning optimizes the parameters that control the learning process to achieve better model performance. Page:60"
+    },
+
+    {
+      "question": "What is Gradient Descent?",
+      "answer": "Gradient Descent is an iterative optimization algorithm used to minimize functions by adjusting parameters in the direction of the negative gradient. Page:36"
+    },
+
+    {
+      "question": "What is Cross-Validation?",
+      "answer": "Cross-validation is a technique for assessing the performance of a model by splitting the dataset into multiple training and validation subsets. Page: 61"
+    },
+
+    {
+      "question": "What is Ensemble Learning?",
+      "answer": "Ensemble learning combines multiple models to improve performance and robustness compared to individual models. Page: 83"
+    },
+
+    {
+      "question": "What is a Random Forest?",
+      "answer": "A Random Forest is an ensemble of decision trees trained on different subsets of data, reducing overfitting and improving accuracy. Page: 83" 
+    },
+
+    {
+      "question": "What is Deep Learning?",
+      "answer": "Deep learning is a subset of machine learning that uses artificial neural networks with multiple layers to model complex patterns. Page: 21"
+    },
+
+    {
+      "question": "What are Convolutional Neural Networks (CNNs)?",
+      "answer": "CNNs are specialized neural networks designed for image processing, using convolutional layers to detect spatial patterns. Page: 66"
+    }
+
+  ]
+  
