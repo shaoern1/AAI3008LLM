@@ -35,10 +35,11 @@ class AgentState(TypedDict):
     info_sufficient: bool
     enable_search: bool
     found_db_info: bool  # New field to track if database had useful info
+    vector_context: str
+    online_context: str
 
 # Create the tools
 web_search = DuckDuckGoSearchRun()
-
 
 class RAGAgent:
     def __init__(self, client, collection_name, llm_model="phi3:mini", 
@@ -67,11 +68,15 @@ class RAGAgent:
         )
         return results
 
-    def retrieve_documents(self, query):
-        results = self.hybrid_search(query, limit=5)
+    def retrieve_documents(self, query, limit=5):
+        results = self.hybrid_search(query, limit=limit)
         context = "Database Context: "
         for result in results:
-            context += str(result.payload['text'])
+            metadata = result.payload['metadata']
+            text = result.payload['text']
+            source = metadata['source']
+            page = str(int(metadata['page']) + 1)
+            context += str(f"{text}, Source: {source}, Pages: {page}.\n")
         return context
     
     def vector_search_node(self, state: AgentState):
@@ -84,17 +89,8 @@ class RAGAgent:
                           if isinstance(msg, HumanMessage)), "")
         
         # Search documents
-        results = self.hybrid_search(query=user_query, limit=5)
-        
-        # Check if we found meaningful results (non-empty or above certain length)
-        found_info = False
-        context = ""
-        for result in results:
-            text = str(result.payload['text'])
-            context += text
-            # Simple heuristic - if we have some substantial content
-            if len(text.strip()) > 50:  
-                found_info = True
+        context = self.retrieve_documents(query=user_query, limit=5)
+        found_info = True
         
         # Add results to messages with appropriate commentary
         if found_info:
@@ -106,7 +102,9 @@ class RAGAgent:
             "messages": messages + [search_message],
             "found_db_info": found_info,
             "info_sufficient": info_sufficient,
-            "enable_search": enable_search
+            "enable_search": enable_search,
+            "vector_context": context,
+            "online_context": ""
         }
    
     
@@ -115,13 +113,14 @@ class RAGAgent:
         messages = state["messages"]
         found_db_info = state["found_db_info"]
         enable_search = state["enable_search"]
+
         
         # If we didn't find any info in the database, don't even need to evaluate
         if not found_db_info:
             return {"info_sufficient": False, 
                     "messages": messages,
                     "enable_search": enable_search,
-                    "found_db_info": found_db_info
+                    "found_db_info": found_db_info,
                     
                     }
         
@@ -180,21 +179,28 @@ class RAGAgent:
                           if isinstance(msg, HumanMessage)), "")
         
         # Run web search
-        web_results = web_search.run(user_query)
+        web_results = web_search.run(user_query) # this is a summarized output of its search results.
         
-        # Add results to messages
-        web_message = AIMessage(content=f"Online Search Context:\n{web_results}")
-        return {"messages": messages + [web_message]}
+        return {
+                "online_context": web_results
+                }
     
     def final_response_node(self, state: AgentState):
         """Generate final response based only on retrieved information"""
         messages = state["messages"]
-
+        vector_context = state["vector_context"]
+        online_context = state["online_context"]
+        
+        
         user_query = next((msg.content for msg in reversed(messages) 
                       if isinstance(msg, HumanMessage)), "")
         
         final_prompt = HumanMessage(content=f"""
         Please answer this question concisely and clearly: "{user_query}"
+        
+        Vector Database Context: {vector_context}
+        
+        Online Search Context: {online_context}
     
         Follow these guidelines:
         1. Use ONLY information from the search results - do not add any external knowledge
@@ -207,8 +213,8 @@ class RAGAgent:
         ANSWER: [Your direct answer to the question using information from the searches]
         
         SOURCES:
-        - Database: [Brief mention of what information came from the database]
-        - Web Search: [Brief mention of what information came from web search, omit if none]
+        - Database: [Brief mention of what information came from the vector database]
+        - Web Search [Brief mention of what information came from the websearch, omit if online search context is empty.]
         """)
         
         final_response = self.llm.invoke(input=[
@@ -323,6 +329,6 @@ Alternatively, you could try asking about a different topic that might be covere
 
 # MCDONALDS HIRE ME
 # client = VSPipe.setup_Qdrant_client()
-# agent = RAGAgent(client=client, collection_name='Ollama-test1')
-# response = agent.invoke("Why is a tomato red", enable_search=False)
+# agent = RAGAgent(client=client, collection_name='Ollama-test1', llm_model="gemma3:4b")
+# response = agent.invoke("What is machine-learning", enable_search=True)
 # print(response)
