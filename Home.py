@@ -5,7 +5,7 @@ import nltk
 nltk.download('punkt_tab')
 
 st.set_page_config(
-page_title="Upload Document",
+page_title="Home",
 page_icon="👋",
 )
 
@@ -21,7 +21,8 @@ st.markdown(
     ### Instructions
     1. Setup Environments and Connections
     2. Upload Document into Vector Database
-    3. Select Ollama Model and Run your queries.
+    3. Select Ollama Model and Run your queries
+    4. Perform Evaluation on various models
     
     ### Features and Support
     Supports Google Search

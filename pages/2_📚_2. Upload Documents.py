@@ -21,7 +21,7 @@ def on_select_change():
         st.session_state.last_modified = "select"
         st.session_state.collection_name = st.session_state.collection_select
 
-st.set_page_config(page_title="Upload Documents", page_icon="📈")
+st.set_page_config(page_title="Upload Documents", page_icon="📚")
 
 st.markdown("# Upload Documents to Vector Database")
 st.sidebar.header("Upload Documents")
