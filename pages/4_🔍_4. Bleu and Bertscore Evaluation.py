@@ -15,6 +15,9 @@ import VectorStore as VSPipe
 from agent import RAGAgent
 import nltk
 
+# Add BERTScore
+from bert_score import score as bert_score
+
 
 # Initialize page configuration
 st.set_page_config(
@@ -66,6 +69,23 @@ def load_qa_pairs(file_path="QA.json"):
         st.error(f"Error loading QA pairs: {str(e)}")
         return []
 
+def calculate_bert_score(predictions, references):
+    """Calculate BERTScore for the predictions and references."""
+    try:
+        # Using the default model ('roberta-large')
+        P, R, F1 = bert_score(predictions, references, lang="en", verbose=False)
+        # Convert torch tensors to numpy arrays
+        P = P.numpy()
+        R = R.numpy()
+        F1 = F1.numpy()
+        return P, R, F1
+    except Exception as e:
+        st.warning(f"Error calculating BERTScore: {str(e)}")
+        # Return empty arrays of the correct length
+        return (np.zeros(len(predictions)), 
+                np.zeros(len(predictions)), 
+                np.zeros(len(predictions)))
+
 @st.cache_data
 def evaluate_rag_model(qa_pairs, model, collection, web_search=False):
     """Evaluate RAG model responses against reference answers."""
@@ -82,7 +102,10 @@ def evaluate_rag_model(qa_pairs, model, collection, web_search=False):
         'bleu_4': [],
         'rouge_1_f': [],
         'rouge_l_f': [],
-        'response_time': []
+        'response_time': [],
+        'bert_score_p': [],
+        'bert_score_r': [],
+        'bert_score_f1': []
     }
     
     # Initialize RAG agent
@@ -92,6 +115,9 @@ def evaluate_rag_model(qa_pairs, model, collection, web_search=False):
     # Process each question
     progress_bar = st.progress(0)
     status_text = st.empty()
+    
+    all_references = []
+    all_predictions = []
     
     for i, pair in enumerate(qa_pairs):
         question = pair['question']
@@ -103,7 +129,7 @@ def evaluate_rag_model(qa_pairs, model, collection, web_search=False):
         # Get model prediction with timing
         start_time = time.time()
         try:
-            prediction = agent.invoke(question, enable_search=False)
+            prediction = agent.invoke(question, enable_search=web_search)
         except Exception as e:
             st.error(f"Error getting prediction for question: {question}")
             st.error(f"Error message: {str(e)}")
@@ -141,8 +167,19 @@ def evaluate_rag_model(qa_pairs, model, collection, web_search=False):
         results['rouge_l_f'].append(rouge_l_f)
         results['response_time'].append(response_time)
         
+        # Collect references and predictions for batch BERTScore calculation
+        all_references.append(reference)
+        all_predictions.append(prediction)
+        
         # Update progress
         progress_bar.progress((i + 1) / len(qa_pairs))
+    
+    # Calculate BERTScore in batch for better performance
+    status_text.text("Calculating BERTScore...")
+    P, R, F1 = calculate_bert_score(all_predictions, all_references)
+    results['bert_score_p'] = P.tolist()
+    results['bert_score_r'] = R.tolist()
+    results['bert_score_f1'] = F1.tolist()
     
     status_text.text("Evaluation complete!")
     
@@ -152,11 +189,25 @@ def evaluate_rag_model(qa_pairs, model, collection, web_search=False):
     results['avg_rouge_1_f'] = np.mean(results['rouge_1_f'])
     results['avg_rouge_l_f'] = np.mean(results['rouge_l_f'])
     results['avg_response_time'] = np.mean(results['response_time'])
+    results['avg_bert_score_f1'] = np.mean(results['bert_score_f1'])
     
     return results
 
 def main():
     st.title("RAG Evaluation")
+    
+    # Check if bert-score is installed
+    try:
+        import bert_score
+        bert_score_available = True
+    except ImportError:
+        st.warning("BERTScore is not installed. Run: `pip install bert-score` to enable this metric.")
+        st.markdown("""
+        ```
+        pip install bert-score
+        ```
+        """)
+        bert_score_available = False
     
     # Load QA pairs
     qa_pairs = load_qa_pairs()
@@ -180,11 +231,36 @@ def main():
         
         # Display summary metrics
         st.subheader("Summary Metrics")
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         col1.metric("Average BLEU-1", f"{results['avg_bleu_1']:.3f}")
         col2.metric("Average BLEU-4", f"{results['avg_bleu_4']:.3f}")
         col3.metric("Average ROUGE-L", f"{results['avg_rouge_l_f']:.3f}")
-        col4.metric("Avg Response Time", f"{results['avg_response_time']:.2f}s")
+        col4.metric("Average BERTScore F1", f"{results['avg_bert_score_f1']:.3f}" if bert_score_available else "N/A")
+        col5.metric("Avg Response Time", f"{results['avg_response_time']:.2f}s")
+        
+        # Create bar chart for metrics comparison
+        if bert_score_available:
+            metrics = ['BLEU-1', 'BLEU-4', 'ROUGE-L', 'BERTScore-F1']
+            values = [
+                results['avg_bleu_1'],
+                results['avg_bleu_4'],
+                results['avg_rouge_l_f'],
+                results['avg_bert_score_f1']
+            ]
+            
+            fig, ax = plt.subplots(figsize=(10, 5))
+            bars = ax.bar(metrics, values, color=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'])
+            ax.set_title('Comparison of Evaluation Metrics')
+            ax.set_ylabel('Score')
+            ax.set_ylim(0, 1)
+            
+            # Add value labels on top of bars
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height + 0.02,
+                        f'{height:.3f}', ha='center', va='bottom')
+            
+            st.pyplot(fig)
         
         # Display per-question results
         st.subheader("Per-Question Results")
@@ -205,11 +281,19 @@ def main():
                 
                 # Display metrics
                 st.markdown("**Metrics:**")
-                col1, col2, col3, col4 = st.columns(4)
-                col1.metric("BLEU-1", f"{results['bleu_1'][i]:.3f}")
-                col2.metric("BLEU-4", f"{results['bleu_4'][i]:.3f}")
-                col3.metric("ROUGE-1", f"{results['rouge_1_f'][i]:.3f}")
-                col4.metric("ROUGE-L", f"{results['rouge_l_f'][i]:.3f}")
+                if bert_score_available:
+                    col1, col2, col3, col4, col5 = st.columns(5)
+                    col1.metric("BLEU-1", f"{results['bleu_1'][i]:.3f}")
+                    col2.metric("BLEU-4", f"{results['bleu_4'][i]:.3f}")
+                    col3.metric("ROUGE-L", f"{results['rouge_l_f'][i]:.3f}")
+                    col4.metric("BERTScore-F1", f"{results['bert_score_f1'][i]:.3f}")
+                    col5.metric("Response Time", f"{results['response_time'][i]:.2f}s")
+                else:
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("BLEU-1", f"{results['bleu_1'][i]:.3f}")
+                    col2.metric("BLEU-4", f"{results['bleu_4'][i]:.3f}")
+                    col3.metric("ROUGE-L", f"{results['rouge_l_f'][i]:.3f}")
+                    col4.metric("Response Time", f"{results['response_time'][i]:.2f}s")
                 
                 st.markdown("---")
         
@@ -223,6 +307,11 @@ def main():
             'ROUGE-1': [f"{score:.3f}" for score in results['rouge_1_f']],
             'ROUGE-L': [f"{score:.3f}" for score in results['rouge_l_f']],
         }
+        
+        if bert_score_available:
+            report_data['BERTScore-P'] = [f"{score:.3f}" for score in results['bert_score_p']]
+            report_data['BERTScore-R'] = [f"{score:.3f}" for score in results['bert_score_r']]
+            report_data['BERTScore-F1'] = [f"{score:.3f}" for score in results['bert_score_f1']]
         
         df = pd.DataFrame(report_data)
         csv = df.to_csv(index=False)
