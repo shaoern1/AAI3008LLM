@@ -41,7 +41,7 @@ web_search = DuckDuckGoSearchRun()
 
 
 class RAGAgent:
-    def __init__(self, client, collection_name, llm_model="phi4-mini", 
+    def __init__(self, client, collection_name, llm_model="phi3:mini", 
                  dense_model='rjmalagon/gte-qwen2-1.5b-instruct-embed-f16'):
         self.client = client
         self.collection_name = collection_name
@@ -77,6 +77,8 @@ class RAGAgent:
     def vector_search_node(self, state: AgentState):
         """Search vector database and determine if results are useful"""
         messages = state["messages"]
+        info_sufficient = state["info_sufficient"]
+        enable_search = state["enable_search"]
         # Get the last user query
         user_query = next((msg.content for msg in reversed(messages) 
                           if isinstance(msg, HumanMessage)), "")
@@ -102,25 +104,72 @@ class RAGAgent:
         
         return {
             "messages": messages + [search_message],
-            "found_db_info": found_info
+            "found_db_info": found_info,
+            "info_sufficient": info_sufficient,
+            "enable_search": enable_search
         }
+   
     
     def evaluate_info_node(self, state: AgentState):
-        """Evaluate if information is sufficient"""
+        """Evaluate if information is sufficient to answer the query"""
         messages = state["messages"]
+        found_db_info = state["found_db_info"]
+        enable_search = state["enable_search"]
         
-        eval_prompt = HumanMessage(content="""
-        Based on the information from Vector Search Context, do you have sufficient information to answer the user's question? 
-        Respond with SUFFICIENT if you have enough information, or INSUFFICIENT if you need more information, NOTHING ELSE.
-        """)
+        # If we didn't find any info in the database, don't even need to evaluate
+        if not found_db_info:
+            return {"info_sufficient": False, 
+                    "messages": messages,
+                    "enable_search": enable_search,
+                    "found_db_info": found_db_info
+                    
+                    }
         
-        eval_response = self.llm.invoke(messages + [eval_prompt])
-        if eval_response.content == "SUFFICIENT":
-            is_sufficient = True
-        else:
-            is_sufficient = False
+        # Get the last user query
+        user_query = next((msg.content for msg in reversed(messages) 
+                        if isinstance(msg, HumanMessage)), "")
         
-        return {"info_sufficient": is_sufficient, "messages": messages}
+        # Get the vector search context
+        vector_content = next((msg.content for msg in messages 
+                            if isinstance(msg, AIMessage) and "Vector Search Context:" in msg.content), "")
+        
+        # Ask LLM to evaluate if the information is sufficient - use a clearer prompt
+        eval_prompt = HumanMessage(content=f"""
+        I need you to evaluate if the following Vector Search Context has SUFFICIENT information to answer this query:
+        
+        User Query: "{user_query}"
+        
+        Context: {vector_content}
+        
+          IMPORTANT INSTRUCTIONS:
+        - If the context contains ANY definition, explanation, or relevant information about the query, output ONLY: "SUFFICIENT"
+        - If the context contains ABSOLUTELY NOTHING related to the query, output ONLY: "INSUFFICIENT"
+
+          Include ONLY one word as the output: SUFFICIENT or INSUFFICIENT
+              """)
+        
+        # Log the evaluation prompt for debugging
+        print(f"Evaluating sufficiency with query: {user_query}")
+        
+        # Get the evaluation from the LLM
+        eval_response = self.llm.invoke(input=messages[-1:] + [eval_prompt])
+        eval_text = eval_response.content.strip().upper()
+        
+        # Log the raw LLM response for debugging
+        print(f"Raw LLM evaluation response: {eval_text}")
+        
+        # Determine sufficiency from response
+        is_sufficient = (eval_text == "SUFFICIENT")
+        
+        # Log the final decision
+        print(f"Final sufficiency determination: {is_sufficient}")
+        
+        return {
+        "info_sufficient": is_sufficient, 
+        "messages": messages,
+        "enable_search": enable_search,
+        "found_db_info": found_db_info
+        }
     
     def web_search_node(self, state: AgentState):
         """Search the web for additional information"""
@@ -140,22 +189,37 @@ class RAGAgent:
     def final_response_node(self, state: AgentState):
         """Generate final response based only on retrieved information"""
         messages = state["messages"]
+
+        user_query = next((msg.content for msg in reversed(messages) 
+                      if isinstance(msg, HumanMessage)), "")
         
-        final_prompt = HumanMessage(content="""
-        Now provide a comprehensive answer to the original question based ONLY on the information provided 
-        in the search results above. Do not use any prior knowledge.
+        final_prompt = HumanMessage(content=f"""
+        Please answer this question concisely and clearly: "{user_query}"
+    
+        Follow these guidelines:
+        1. Use ONLY information from the search results - do not add any external knowledge
+        2. Write in a clear, straightforward style with no unnecessary jargon
+        3. Keep your answer focused and to the point
+        4. If the search results don't contain enough information on a specific aspect, simply state "Based on the available information, I cannot determine [specific aspect]"
         
-        YOU MUST INCLUDE ALL THE INFORMATION EXACTLY IN THE PREVIOUS MESSAGES FROM DATABASE SEARCH AND WEB SEARCH INTO TWO SECTIONS IN YOUR RESPONSE,
-        VECTOR SEARCH CONTEXT: , ONLINE SEARCH CONTEXT: ,
-        IF THERE WAS NO ONLINE SEARCH CONTEXT DO NOT INCLUDE ONLINE SEARCH CONTEXT:
+        Your answer should be structured like this:
         
-        For each piece of information in your answer, indicate which source it came from 
-        (database or web search). If the search results don't contain enough information to 
-        answer some aspect of the question, explicitly state that you don't have that information.
+        ANSWER: [Your direct answer to the question using information from the searches]
+        
+        SOURCES:
+        - Database: [Brief mention of what information came from the database]
+        - Web Search: [Brief mention of what information came from web search, omit if none]
         """)
         
-        final_response = self.llm.invoke(messages + [final_prompt])
+        final_response = self.llm.invoke(input=[
+        SystemMessage(content="""You are a precise, clear assistant that provides direct answers based only on provided information.
+        Be concise and straightforward. Avoid unnecessary words, repetition, and jargon.
+        Never include instructions or meta-commentary in your responses."""),
+        final_prompt
+        ])
+
         return {"messages": messages + [final_response]}
+
     
     def insufficient_info_node(self, state: AgentState):
         """Generate a response when information is insufficient and web search is disabled"""
@@ -178,16 +242,16 @@ Alternatively, you could try asking about a different topic that might be covere
     
     def route_after_evaluation(self, state: AgentState) -> str: # Purely for logical routing
         """Route to the next node based on information sufficiency and search settings"""
-        # If sufficient and no further action needed, go straight to final response
-        if state["info_sufficient"] and not state["enable_search"]:
+        enable_search = state["enable_search"]
+        info_sufficient = state["info_sufficient"]
+
+        if info_sufficient and not enable_search:
             return "final_response"  # Terminal
         
-        # If insufficient, check if we can search the web
-        if state["enable_search"]:
-            return "web_search"  # Web search enabled, so use it
+        if enable_search:
+            return "web_search"
         else:
-            return "insufficient_info"  # Terminal
-    
+            return "insufficient_info"
     
     # Vector Search -> Evaluation -> Web_search(Conditional) -> Final Response [CASE: Enable_search == TRUE & INFO INSUFFICIENT]
     # Vector Search -> Evaluation -> Final Response [CASE: Enable_search flag FALSE, INFO SUFFICIENT]

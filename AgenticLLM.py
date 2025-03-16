@@ -242,8 +242,9 @@ class RAGAgent:
         Action Input: definition of loss function and its importance
         Observation: Loss functions measure how far off predictions are from actual values. They're used in training machine learning models.
         Thought: I now know the final answer.
-        Final Answer: A loss function measures the difference between predicted values and actual values, guiding the optimization process in machine learning.
+        Final Answer: A loss function measures the difference between predicted values and actual values, guiding the optimization process in machine learning. This information is found on page 15
 
+        Your Final Answer should be a concise summary of the information you found and must return what page the information is found at. 
         Begin!
 
         Question: {input}
