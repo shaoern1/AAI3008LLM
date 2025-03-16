@@ -14,7 +14,6 @@ sys.path.append('.')  # Add current directory to path
 import VectorStore as VSPipe
 from agent import RAGAgent
 import nltk
-
 # Add BERTScore
 from bert_score import score as bert_score
 
@@ -211,7 +210,9 @@ def main():
     
     # Load QA pairs
     qa_pairs = load_qa_pairs()
-    
+    client = VSPipe.setup_Qdrant_client()
+    collection_list = VSPipe.get_collection_names(client)
+
     # Display basic configuration options
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -219,15 +220,13 @@ def main():
         model = st.selectbox("Select Model", model_options)
     
     with col2:
-        collection = st.text_input("Vector DB Collection", "LLMProject")
-    
-    with col3:
-        web_search = st.checkbox("Enable Web Search", False)
+        collection_select = st.selectbox("Select your collection", collection_list)
+
     
     # Start evaluation button
     if st.button("Start Evaluation"):
         with st.spinner("Evaluating RAG model..."):
-            results = evaluate_rag_model(qa_pairs, model, collection, web_search)
+            results = evaluate_rag_model(qa_pairs, model, collection_select, False)
         
         # Display summary metrics
         st.subheader("Summary Metrics")
@@ -238,7 +237,6 @@ def main():
         col4.metric("Average BERTScore F1", f"{results['avg_bert_score_f1']:.3f}" if bert_score_available else "N/A")
         col5.metric("Avg Response Time", f"{results['avg_response_time']:.2f}s")
         
-        # Create bar chart for metrics comparison
         if bert_score_available:
             metrics = ['BLEU-1', 'BLEU-4', 'ROUGE-L', 'BERTScore-F1']
             values = [
@@ -247,20 +245,14 @@ def main():
                 results['avg_rouge_l_f'],
                 results['avg_bert_score_f1']
             ]
-            
-            fig, ax = plt.subplots(figsize=(10, 5))
-            bars = ax.bar(metrics, values, color=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'])
-            ax.set_title('Comparison of Evaluation Metrics')
-            ax.set_ylabel('Score')
-            ax.set_ylim(0, 1)
-            
-            # Add value labels on top of bars
-            for bar in bars:
-                height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2., height + 0.02,
-                        f'{height:.3f}', ha='center', va='bottom')
-            
-            st.pyplot(fig)
+
+            # Create a DataFrame with your metrics as the index
+            # Use pd.Categorical to enforce the order
+            df = pd.DataFrame({'Score': values}, index=pd.Categorical(metrics, categories=metrics, ordered=True))
+
+            # Create bar chart with proper y-axis limits
+            st.bar_chart(df, y_label='Avg Score', height=400)
+
         
         # Display per-question results
         st.subheader("Per-Question Results")
