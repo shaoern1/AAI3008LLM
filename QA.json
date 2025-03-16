@@ -1,7 +1,7 @@
 [
     {
       "question": "What are the 2 most common regularizations?",
-      "answer": "The 2 most common regularizations are L1 and L2 regularization Pages: 12"
+      "answer": "The 2 most common regularizations are L1 and L2 regularization Pages: 53"
     },
 
     {
@@ -47,7 +47,12 @@
     {
       "question": "What are Convolutional Neural Networks (CNNs)?",
       "answer": "CNNs are specialized neural networks designed for image processing, using convolutional layers to detect spatial patterns. Page: 66"
+    },
+    {
+      "question": "why is tomato red?",
+      "answer": "I couldn't find any relevant information about 'why is tomato red' in my document database. If you enable web search, I can look for information online. Alternatively, you could try asking about a different topic that might be covered in the documents I have access to."
     }
+
 
   ]
   

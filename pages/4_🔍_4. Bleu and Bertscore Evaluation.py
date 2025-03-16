@@ -13,6 +13,7 @@ import sys
 sys.path.append('.')  # Add current directory to path
 import VectorStore as VSPipe
 from agent import RAGAgent
+import nltk
 
 
 # Initialize page configuration
@@ -102,7 +103,7 @@ def evaluate_rag_model(qa_pairs, model, collection, web_search=False):
         # Get model prediction with timing
         start_time = time.time()
         try:
-            prediction = agent.invoke(question, enable_search=web_search)
+            prediction = agent.invoke(question, enable_search=False)
         except Exception as e:
             st.error(f"Error getting prediction for question: {question}")
             st.error(f"Error message: {str(e)}")

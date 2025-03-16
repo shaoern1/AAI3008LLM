@@ -213,7 +213,7 @@ class RAGAgent:
         ANSWER: [Your direct answer to the question using information from the searches]
         
         SOURCES:
-        - Database: [Brief mention of what information came from the vector database]
+        - Database: [Brief mention of what information came from the vector database, include Source and Page]
         - Web Search [Brief mention of what information came from the websearch, omit if online search context is empty.]
         """)
         
