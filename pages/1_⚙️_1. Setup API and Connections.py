@@ -1,6 +1,6 @@
 import streamlit as st
 
-st.set_page_config(page_title="Setup", page_icon="📈")
+st.set_page_config(page_title="Setup", page_icon="⚙️")
 
 st.markdown("# ⚙️ Setup your API and Connections")
 st.sidebar.header("Upload Documents")

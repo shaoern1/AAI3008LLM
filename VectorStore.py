@@ -73,6 +73,7 @@ def generateEmbeddings(documents):
     late_interaction_embedding_model = LateInteractionTextEmbedding("colbert-ir/colbertv2.0")
     sparse_embeddings_model = SparseTextEmbedding("Qdrant/bm25")
     dense_model = OllamaEmbeddings(model='rjmalagon/gte-qwen2-1.5b-instruct-embed-f16')
+    print("Models Loaded")
 
     for idx, item in enumerate(documents):
         metadata = item.metadata
@@ -89,6 +90,7 @@ def generateEmbeddings(documents):
                                              late_interaction=late_interaction_embed
                                              )
                               )
+        print(f"Processed {idx+1}/{len(documents)}")
         
     return embeddingsList
 
@@ -191,38 +193,38 @@ def upsert_points(client, collection_name, points, batch_size=10):
         except Exception as e:
             print(f"Error with batch {i//batch_size + 1}: {str(e)}")
 
-# def main():
-#     # Load environment variables
-#     load_dotenv()
+def main():
+    # Load environment variables
+    load_dotenv()
     
-#     # Specify the file path to process
-#     file_path = 'C:/Users/shaoe/OneDrive/Desktop/AAI3008LLM/The_Hundred_page_Machine_Learning_Book_Andriy_Burkov_Z_Library.pdf'
+    # Specify the file path to process
+    file_path = '/Users/shaoern/Desktop/LLM/clone/AAI3008LLM/The_Hundred_page_Machine_Learning_Book_Andriy_Burkov_Z_Library (1).pdf'
     
-#     # Load and process the document
-#     print(f"Loading document: {file_path}")
-#     documents = load_document(file_path)
+    # Load and process the document
+    print(f"Loading document: {file_path}")
+    documents = load_document(file_path)
     
-#     print(f"Creating chunks from document")
-#     chunks = create_chunks(documents)
-#     print(f"Created {len(chunks)} chunks")
+    print(f"Creating chunks from document")
+    chunks = create_chunks(documents)
+    print(f"Created {len(chunks)} chunks")
     
-#     print("Generating embeddings (this may take some time)...")
-#     embeddings_list = generateEmbeddings(chunks)
-#     print(f"Generated embeddings for {len(embeddings_list)} chunks")
+    print("Generating embeddings (this may take some time)...")
+    embeddings_list = generateEmbeddings(chunks)
+    print(f"Generated embeddings for {len(embeddings_list)} chunks")
     
-#     # Set up Qdrant client and collection
-#     client = setup_Qdrant_client()
-#     client.delete_collection("Ollama-RAG")
-#     collection_name = create_collection(client)
+    # Set up Qdrant client and collection
+    client = setup_Qdrant_client()
+    client.delete_collection("LLMProject")
+    collection_name = create_collection(client, collection_name = "LLMProject")
     
-#     # Prepare and upsert vectors
-#     points = prepare_vector_points(embeddings_list)
-#     upsert_points(client, collection_name, points)
+    # Prepare and upsert vectors
+    points = prepare_vector_points(embeddings_list)
+    upsert_points(client, collection_name, points)
     
-#     print("Document processing and vector storage complete!")
+    print("Document processing and vector storage complete!")
 
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()
 
 
 
