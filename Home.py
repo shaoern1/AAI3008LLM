@@ -2,14 +2,13 @@ import streamlit as st
 
 import nltk
 
-
 nltk.download('punkt_tab')
 
 st.set_page_config(
 page_title="Home",
 page_icon="👋",
 )
-  
+
 st.sidebar.success("Select a Page Above")
 
 st.markdown(
